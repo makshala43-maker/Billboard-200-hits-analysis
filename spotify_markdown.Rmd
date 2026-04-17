@@ -1,0 +1,315 @@
+---
+title: "Spotify music trends analysis"
+subttitle: "Google Data Analytics Capstone Project"
+author: "Maksymilian Hala"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    highlight: espresso
+    theme: darkly
+    df_print: paged
+
+---
+## 1. Defining the Problem
+
+  The goal of this project is to analyze the evolution of music hits on Spotify between 1970 and 2024.
+  
+  The primary objective that came up during the analysis is to investigate the steady decline in average "energy" levels in the 2010s and 
+determine if the rise of specific genres like hip-hop or pop has influenced this trend.
+
+### Key Research Questions:
+
+* How has the mean energy of top hits changed over the decades?
+  * What determined the energy decline in the 2010s?
+  * How does popularity of leading mainstream genres affect this sudden         change?
+* How has song duration evolved across mainstream music?
+
+## 2. Data Sourcing
+
+  The data for this analysis was sourced from the kaggle **Spotify Hits Dataset**, which contained data of billboard 200 hits from 1960s to 2020s (The analysis covered tracks from 1970s, as data before that time was mostly incomplete)
+  
+  This dataset is reliable as it contains verified audio features 
+(energy, valence, tempo) extracted directly via the Spotify Web API.
+
+## 3. Process: Data Cleaning and Transformation
+
+To ensure data integrity, a two-step cleaning process was implemented using **SQL (BigQuery)** and **R**.
+
+```{sql, eval=FALSE}
+SELECT DISTINCT
+
+--Here I prepared a few interesting audio features and other categories needed for my analysis
+
+  `Track URI` AS track_uri,
+  LOWER(TRIM(`Track Name`)) AS track_name,
+  LOWER(TRIM(`Artist Name_s_`)) AS artist_name,
+  CAST(LEFT(`Album Release Date`, 4) AS INT64) AS release_year,
+  `Explicit` AS explicit,
+  `Danceability` AS danceability,
+  `Energy` AS energy,
+  `Speechiness` AS speechiness,
+  `Acousticness` AS acousticness,
+  `Liveness` AS liveness,
+  `Valence` AS valence,
+  `Tempo` AS tempo,
+  ROUND(`Track Duration _ms_` / 1000, 2) AS track_duration_s,
+  LOWER(TRIM(`Artist Genres`)) AS genres
+  
+FROM 
+  `spotify-hits-490117.spotify.hits` 
+  
+WHERE 
+  `Track Name` IS NOT NULL 
+  AND TRIM(`Track Name`) != ''
+  AND `Artist Name_s_` IS NOT NULL
+  AND TRIM(`Artist Name_s_`) != ''
+  AND `Album Release Date` IS NOT NULL 
+  AND TRIM(`Album Release Date`) != ''
+  
+--It`s worth mentioning that I didnt use every one of these features,
+--but they are left for possible further analysis
+
+```
+
+After cleaning the dataset in SQL, the rest of the analysis was conducted in R.
+
+## 4. Data Analysis
+
+### Question 1:
+
+How has the mean energy of top hits changed over the decades?
+
+```{r, message=FALSE, warning=FALSE}
+
+library(patchwork)
+library(tidyverse)
+```
+
+
+```{r, message = FALSE,echo = FALSE, warning=FALSE}
+music_data_v2 <- read_csv("C:/Users/772jo/Desktop/r_moje/music_cleaned_v3.csv")
+```
+```{r, warning=FALSE, message = FALSE}
+music_trends_v2 <- music_data_v2 %>%
+  filter(release_year >=1970) %>%
+  group_by(release_year) %>%
+  summarise(avg_energy = mean(energy, na.rm = TRUE))
+
+energy_plot <- ggplot(data = music_trends_v2, aes(x = release_year, y = avg_energy)) +
+  geom_smooth(method = "loess", color = "blue", se = FALSE, linewidth = 1.5) +
+  geom_area(fill = "green", alpha = 0.15) +
+  coord_cartesian(ylim = c(0.45, 0.8)) +
+  geom_line(color = "green", linewidth = 2 ) +
+  geom_point(color = "black", size = 2) +         
+  theme_minimal() +
+  labs(
+   title = "How energetic top hits were throughout the decades",
+   x = "Year",
+   y = "mean energy"
+   ) +
+  theme(
+    plot.background = element_rect(fill = alpha("black", 0.75), color = NA),
+    panel.background = element_rect(fill = "transparent", color = NA),
+    axis.text = element_text(color = "gray80"),
+    axis.title = element_text(color = "white", face = "bold"),
+    plot.title = element_text(color = "white", face = "bold", size = 16),
+    legend.background = element_rect(fill = "transparent"), 
+    legend.title = element_text(color = "white", face = "bold"),
+    legend.text = element_text(color = "white"), 
+    panel.grid.major = element_line(color = "gray40"),
+    panel.grid.minor = element_blank()
+  )
+energy_plot
+```
+
+  This visualization tracks the mean energy levels of hit songs from
+1970 to 2024. The data reveals a steady upward trend peaking around 2010,
+followed by a significant decline in recent years. This suggests a shift
+toward more melancholic sounds in mainstream music over the last decade.
+
+### Hypothesis
+  The decline is caused by less energetic Rap/Hip-Hop hits which increased in
+number compared to more dynamic Pop.
+
+### Comparative Energy Analysis: Pop vs. Rap/Hip-Hop
+
+```{r,message=FALSE, warning=FALSE}
+genre_analysis <- music_data_v2 %>%
+  filter(release_year > 2003) %>%
+  mutate(
+   mainstream = case_when(
+     str_detect(genres, "rap|hip-hop|trap|drill") ~ "Rap / Hip-Hop",
+     str_detect(genres, "pop") ~ "Pop",
+     TRUE ~ "Other") 
+  ) %>%
+  filter(mainstream != "Other")
+#Above I cleared the dataset of any song from other genre than pop and hip-hop
+genre_energy <- genre_analysis %>%
+  group_by(release_year, mainstream) %>%
+  summarise(mean_energy = mean(energy, na.rm = TRUE))
+
+
+rap_pop_plot <- ggplot(data = genre_energy, aes(x = release_year, y = mean_energy, color = mainstream)) +
+  geom_line(linewidth = 1.5) +
+  geom_point(color = "white", size = 2) +
+  scale_color_manual(values = c("Pop" = "green", "Rap / Hip-Hop" = "red")) +
+  labs(
+    title = "Is rap less energetic than pop?",
+    subtitle = "Average energy of rap and pop in last 22 years",
+    x = "Release year",
+    y = "Average energy",
+    color = "Genre:" 
+  ) +
+  theme(
+    plot.background = element_rect(fill = alpha("black", 0.75), color = NA),
+    panel.background = element_rect(fill = "transparent", color = NA),
+    axis.text = element_text(color = "gray80"),
+    axis.title = element_text(color = "white", face = "bold"),
+    plot.title = element_text(color = "white", face = "bold", size = 16),
+    legend.background = element_rect(fill = "transparent"), 
+    legend.title = element_text(color = "white", face = "bold"),
+    legend.text = element_text(color = "white"), 
+    panel.grid.major = element_line(color = "gray40"),
+    panel.grid.minor = element_blank()
+  )
+rap_pop_plot
+```
+  
+  My initial hypothesis posited that the overall decline 
+in music energy was driven by a shift in dominant genres — specifically,
+pop being replaced by a presumably calmer rap. 
+
+  However, the data completely refuted this assumption,
+revealing that rap is, on average, just as energetic as pop,
+and often even more so.
+
+  The actual driver behind the energy drop was
+a global, industry-wide trend. Around 2010, artists across both 
+genres began producing significantly calmer and more melancholic music,
+taking for example Adele, Billie Eilish, Travis Scott or Drake,
+lead artists of both genres in 2010s.That stylistic shift persisted
+until roughly 2020.
+
+  Last thing to do is to check if hip-hop in fact became more popular in 2010s.
+
+### Mainstream Genre Evolution and Market Share
+
+```{r,message=FALSE, warning=FALSE}
+genre_count <- genre_analysis %>%
+  group_by(release_year, mainstream) %>%
+  summarize(song_count = n(), .groups = 'drop' )
+
+genres_plot <- ggplot(data = genre_count, aes(x = release_year, y = song_count, fill = mainstream)) +
+         geom_col(position = "dodge", alpha = 0.8) +
+           scale_fill_manual(values = c("Pop" = "green", "Rap / Hip-Hop" = "red")) +
+           labs(
+            title = "Evolution of mainstream genres - Pop vs Rap",
+            subtitle = "Amount of songs of each genre in the last 22 years",
+            x = "Release year",
+            y = "Amount of songs",
+            fill = "Genre:"
+            ) +
+            theme(
+                plot.background = element_rect(fill = alpha("black", 0.7)),
+                panel.background = element_rect(fill = "transparent"),
+                axis.text = element_text(color = "gray80"),
+                axis.title = element_text(color = "white", face = "bold"),
+                plot.title = element_text(color = "white", face = "bold", size = 16),
+                legend.background = element_rect(fill = "transparent"), 
+                legend.title = element_text(color = "white", face = "bold"),
+                legend.text = element_text(color = "white"),
+                panel.grid.major.y = element_line(color = "black"),
+                panel.grid.major.x = element_blank(),
+                panel.grid.minor = element_blank()
+                )
+genres_plot
+```
+  
+  Data proved partly the initial hypothesis - average count of
+hit hip hop songs increased in 2010s signifincantly.
+
+  Whats more interesting, in that time period, there is a negative
+correlation between these genres in 2010s - the more hit hip-hop
+songs came out, the less hit pop songs appeared.
+
+  This suggests a fierce competition for mainstream spotlight - whenever
+general audience was shifting towards rap it was at the cost of pop songs.
+  
+  
+### Question 2:
+How has song duration evolved across mainstream music?
+
+
+### Evolution of Song Duration
+
+```{r,message=FALSE, warning=FALSE}
+
+music_trends_duration_v2 <- music_data_v2 %>%
+  filter(release_year >=1970) %>%
+  group_by(release_year) %>%
+  summarise(avg_duration = mean(track_duration_s, na.rm = TRUE))
+
+time_plot <- ggplot(data = music_trends_duration_v2, aes(x = release_year, y = avg_duration)) +
+  geom_line(color = "blue", linewidth = 2 ) +
+  geom_area(fill = "blue", alpha = 0.15) +
+  coord_cartesian(ylim = c(175, 275)) +
+  geom_point(color = "darkblue", size = 2) +
+  labs(
+  title = "Top hits` duration throughout the decades",
+  x = "Year",
+  y = "average song duration"
+  ) +
+  theme(
+    plot.background = element_rect(fill = alpha("black", 0.7)),
+    panel.background = element_rect(fill = "transparent"),
+    axis.text = element_text(color = "gray80"),
+    axis.title = element_text(color = "white", face = "bold"),
+    plot.title = element_text(color = "white", face = "bold", size = 16),
+    legend.background = element_rect(fill = "transparent"), 
+    legend.title = element_text(color = "white", face = "bold"),
+    legend.text = element_text(color = "white"),
+    panel.grid.major.y = element_line(color = "black"),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor = element_blank()
+  )
+time_plot
+```
+
+  There is a downward trajectory in average song duration starting
+around 1990s, with extreme accelertion of that trend around 2015.
+This trend correlates with the rise of music streaming
+platforms and short form content like Tik-Tok. Shorter tracks allow 
+for higher replayability and are more
+compatible with streaming algorithms, leading to a strategic shift in
+music production.
+
+```{r,eval=FALSE, warning=FALSE}
+(energy_plot + rap_pop_plot) / (genres_plot + time_plot)
+ggsave("music_trends_v2.png", width = 16, height = 9, dpi = 300)
+#Creating a nice conclusion image with all 4 plots
+```
+## 5. Conclusion and final insights
+
+![](music_trends_v2.png)
+
+  The analysis rejects the hypothesis that Rap alone caused the energy
+decline, as the trend is visible across all mainstream genres.
+However, the shortening of tracks suggests a strategic shift in the
+music industry to optimize for digital streaming and short form content platforms.
+
+### Key Takeaways:
+
+* Adaptability: Labels and artists should focus on music created for
+short form content if they want to have a higher chance of making a hit.
+Long songs are not recommended, preferable duration is a bit over 3 minutes.
+
+* Trend monitoring: The inverse relationship between Pop and Rap popularity
+suggests that marketing strategies should be adjusted based on which genre
+is currently peaking.
+
+* Adjusting the energy: Depending on the genre, nowadays Hip-Hop/Rap hits
+are on average way more energetic than Pop hits, which should be taken into
+consideration by artists, as well as lables 
+
