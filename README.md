@@ -6,7 +6,7 @@ This project analyzes 50 years of Spotify hits to investigate the evolution of m
 
 ## Key Insights
 * **Energy Decline:** A significant downward trend in song energy has been observed since 2010 across all mainstream genres.
-* **The "Shrinking" Song:** Average track duration decreased by ~40 seconds over the last decade to optimize for streaming algorithms.
+* **Song Duration Decline:** Average track duration decreased by ~40 seconds over the last decade to optimize for short form content algorithms.
 * **Genre Dynamics:** Disproved the myth that Rap alone is responsible for the "chill" shift in music; the trend is industry-wide.
 
 ## Final Dashboard
