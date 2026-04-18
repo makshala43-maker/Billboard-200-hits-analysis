@@ -18,4 +18,4 @@ This project analyzes 50 years of Spotify hits to investigate the evolution of m
 ## Technologies Used
 * **SQL (BigQuery):**
 * **R (Tidyverse, ggplot2):** 
-* **R Markdown:** 
+* **R Markdown** 
