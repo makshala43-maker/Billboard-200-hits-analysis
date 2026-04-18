@@ -13,7 +13,7 @@ This project analyzes 50 years of Spotify hits to investigate the evolution of m
 ![Analysis Dashboard](music_trends_v2.png)
 
 ## Full Technical Report
-👉 [**Click here to view the full interactive HTML report**](https://makshala43-maker.github.io/Billboard-200-hits-analysis/)
+👉 [**Click here to view the full HTML report**](https://makshala43-maker.github.io/Billboard-200-hits-analysis/)
 
 ## Technologies Used
 * **SQL (BigQuery):**
